@@ -41,17 +41,15 @@ jobs:
           zipalign --version || true
           apksigner version || true
 
-      - name: Prepare input APK
+      # ── INI BAGIAN YANG DIUBAH ──
+      - name: Download APK from Release
         run: |
-          for name in "Ml_Tools_Rimuru_1_0_1_.apk" "rimuru.apk" "input.apk"; do
-            if [ -f "$name" ]; then
-              echo "Found APK: $name"
-              cp "$name" original.apk
-              break
-            fi
-          done
+          # Pastikan nama file di Release lu persis "original.apk"
+          # Kalau namanya beda (misal: rimuru.apk), ganti di bagian akhir link ini
+          wget -q "https://github.com/Tein-pixel/Rimuru/releases/download/v1.0/original.apk" -O original.apk
+          
           if [ ! -f original.apk ]; then
-            echo "ERROR: No input APK found. Upload original.apk"
+            echo "ERROR: Gagal download APK. Cek apakah nama file di Release sudah 'original.apk' dan tag-nya 'v1.0'."
             exit 1
           fi
           echo "Input APK size: $(du -sh original.apk | cut -f1)"
