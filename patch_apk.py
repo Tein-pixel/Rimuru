@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # patch_apk.py — ML Tools Rimuru Firebase Premium Bypass
-# Target: com.LbzToolss | Smali patch via apktool
+# Target: com.LbzToolss | Smali patch + Resource Sanitization
 
 import os
 import re
@@ -312,28 +312,53 @@ def inject_sharedprefs_premium(smali_dirs: list[Path]) -> int:
     log.info(f"  → SharedPrefs premium injected after invoke-super @ line {inject_after + 2}")
     return 1
 
-def clean_invalid_resources():
-    """Hapus file resource yang namanya mengandung huruf kapital atau karakter aneh."""
+def sanitize_resources():
+    """
+    Mengganti nama file resource yang tidak valid (mengandung huruf kapital / karakter ilegal)
+    menjadi format aman (lowercase, underscore), dan memperbarui referensinya di semua XML.
+    """
     res_dir = Path(DECODED_DIR) / "res"
     if not res_dir.exists():
         return
 
-    log.info("Cleaning invalid resource filenames...")
-    count = 0
-    # Hanya cek folder drawable, layout, mipmap, xml, anim
-    target_dirs = ["drawable", "drawable-v21", "drawable-v24", "layout", "mipmap-hdpi", "mipmap-mdpi", "mipmap-xhdpi", "mipmap-xxhdpi", "mipmap-xxxhdpi", "xml", "anim"]
+    log.info("Sanitizing invalid resource filenames...")
+    rename_map = {}
+
+    # 1. Rename invalid files
+    for file in res_dir.rglob("*"):
+        if file.is_file():
+            if not re.match(r'^[a-z0-9_.]+$', file.name):
+                new_name = re.sub(r'[^a-z0-9_.]', '_', file.name.lower())
+                # Ensure no conflict
+                if new_name != file.name:
+                    log.warning(f"  Renaming: {file.name} -> {new_name}")
+                    new_path = file.with_name(new_name)
+                    file.rename(new_path)
+                    rename_map[file.name] = new_name
+
+    if not rename_map:
+        log.info("  No invalid resources found.")
+        return
+
+    # 2. Update all XML references (res/values/*.xml, AndroidManifest.xml, etc.)
+    log.info("Updating XML references...")
+    xml_files = list(res_dir.rglob("*.xml")) + [Path(DECODED_DIR) / "AndroidManifest.xml"]
     
-    for tdir in target_dirs:
-        dir_path = res_dir / tdir
-        if not dir_path.exists():
+    for xml_file in xml_files:
+        if not xml_file.exists():
             continue
-        for file in dir_path.rglob("*"):
-            if file.is_file():
-                if not re.match(r'^[a-z0-9_\.]+$', file.name):
-                    log.warning(f"  Removing invalid resource: {file.name}")
-                    file.unlink()
-                    count += 1
-    log.info(f"Removed {count} invalid resource files.")
+        content = xml_file.read_text(errors="replace")
+        modified = False
+        for old_name, new_name in rename_map.items():
+            if old_name in content:
+                content = content.replace(old_name, new_name)
+                modified = True
+        
+        if modified:
+            xml_file.write_text(content)
+            log.info(f"  Updated: {xml_file.name}")
+
+    log.info("Resource sanitization complete.")
 
 def recompile():
     log.info(f"Recompiling {DECODED_DIR} → {OUTPUT_APK}")
@@ -341,12 +366,10 @@ def recompile():
     if Path(OUTPUT_APK).exists():
         Path(OUTPUT_APK).unlink()
 
-    # Bersihkan resource yang namanya bikin error AAPT2 sebelum build
-    clean_invalid_resources()
+    # Sanitize resources before building
+    sanitize_resources()
 
-    # Menggunakan --use-aapt1 untuk menghindari validasi ketat AAPT2
-    # yang menyebabkan error "Invalid file name: must contain only [a-z0-9_.]"
-    cmd = ["apktool", "b", DECODED_DIR, "-o", OUTPUT_APK, "--force-all", "--use-aapt1"]
+    cmd = ["apktool", "b", DECODED_DIR, "-o", OUTPUT_APK, "--force-all"]
     run(cmd)
     log.info(f"Recompile complete → {OUTPUT_APK}")
 
