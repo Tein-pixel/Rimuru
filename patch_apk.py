@@ -55,6 +55,7 @@ def decompile():
         shutil.rmtree(DECODED_DIR)
 
     log.info(f"Decompiling {INPUT_APK} ...")
+    # Gunakan framework default
     run(["apktool", "d", INPUT_APK, "-o", DECODED_DIR, "--force"])
     log.info(f"Decompile complete → {DECODED_DIR}/")
 
@@ -312,10 +313,40 @@ def inject_sharedprefs_premium(smali_dirs: list[Path]) -> int:
     log.info(f"  → SharedPrefs premium injected after invoke-super @ line {inject_after + 2}")
     return 1
 
+def clean_invalid_resources():
+    """Hapus file resource yang namanya mengandung huruf kapital atau karakter aneh."""
+    res_dir = Path(DECODED_DIR) / "res"
+    if not res_dir.exists():
+        return
+
+    log.info("Cleaning invalid resource filenames...")
+    count = 0
+    for file in res_dir.rglob("*"):
+        if file.is_file() and not file.name.islower() or any(c in file.name for c in ['$', '@', '#']):
+            # Cek apakah namanya murni lowercase alfanumerik dan underscore
+            if not re.match(r'^[a-z0-9_\.]+$', file.name):
+                log.warning(f"  Removing invalid resource: {file.name}")
+                file.unlink()
+                count += 1
+    log.info(f"Removed {count} invalid resource files.")
+
 def recompile():
     log.info(f"Recompiling {DECODED_DIR} → {OUTPUT_APK}")
-    # DIUBAH DI SINI: Ditambahkan --use-aapt2 biar gak error invalid resource name
-    run(["apktool", "b", DECODED_DIR, "-o", OUTPUT_APK, "--force-all", "--use-aapt2"])
+    # Matikan pengecekan AAPT2 yang ketat dengan menghapus --use-aapt2
+    # Dan panggil apktool untuk build
+    cmd = ["apktool", "b", DECODED_DIR, "-o", OUTPUT_APK, "--force-all"]
+    log.info(f"$ {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        log.error("Build failed! Trying fallback...")
+        log.error(result.stderr)
+        # Fallback: build tanpa resource table (paksa skip)
+        log.info("Attempting fallback: removing problematic res files...")
+        clean_invalid_resources()
+        run(["apktool", "b", DECODED_DIR, "-o", OUTPUT_APK, "--force-all"])
+    else:
+        log.info("Recompile success.")
     log.info(f"Recompile complete → {OUTPUT_APK}")
 
 def main():
