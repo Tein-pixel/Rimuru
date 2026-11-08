@@ -20,32 +20,23 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install apktool
+      # ── INSTALL APKTOOL VIA APT (ANTI ERROR) ──
+      - name: Install apktool via apt
         run: |
-          mkdir -p $HOME/bin
-          APKTOOL_VERSION="2.9.3"
-          wget -q "https://github.com/iBotPeaches/Apktool/releases/download/v${APKTOOL_VERSION}/apktool_${APKTOOL_VERSION}.jar" \
-               -O $HOME/bin/apktool.jar
-          cat > $HOME/bin/apktool << 'SCRIPT'
-          #!/bin/bash
-          java -jar $HOME/bin/apktool.jar "$@"
-          SCRIPT
-          chmod +x $HOME/bin/apktool
-          echo "$HOME/bin" >> $GITHUB_PATH
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq apktool
           apktool --version
 
       - name: Install Android build tools
         run: |
-          sudo apt-get update -qq
           sudo apt-get install -y -qq zipalign apksigner
           zipalign --version || true
           apksigner version || true
 
-      # ── INI BAGIAN YANG DIUBAH ──
+      # ── DOWNLOAD APK DARI RELEASE ──
       - name: Download APK from Release
         run: |
-          # Pastikan nama file di Release lu persis "original.apk"
-          # Kalau namanya beda (misal: rimuru.apk), ganti di bagian akhir link ini
+          # Pastikan nama file di Release lu persis "original.apk" dan tag-nya "v1.0"
           wget -q "https://github.com/Tein-pixel/Rimuru/releases/download/v1.0/original.apk" -O original.apk
           
           if [ ! -f original.apk ]; then
