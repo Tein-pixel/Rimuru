@@ -312,40 +312,43 @@ def inject_sharedprefs_premium(smali_dirs: list[Path]) -> int:
     log.info(f"  → SharedPrefs premium injected after invoke-super @ line {inject_after + 2}")
     return 1
 
+def clean_invalid_resources():
+    """Hapus file resource yang namanya mengandung huruf kapital atau karakter aneh."""
+    res_dir = Path(DECODED_DIR) / "res"
+    if not res_dir.exists():
+        return
+
+    log.info("Cleaning invalid resource filenames...")
+    count = 0
+    # Hanya cek folder drawable, layout, mipmap, xml, anim
+    target_dirs = ["drawable", "drawable-v21", "drawable-v24", "layout", "mipmap-hdpi", "mipmap-mdpi", "mipmap-xhdpi", "mipmap-xxhdpi", "mipmap-xxxhdpi", "xml", "anim"]
+    
+    for tdir in target_dirs:
+        dir_path = res_dir / tdir
+        if not dir_path.exists():
+            continue
+        for file in dir_path.rglob("*"):
+            if file.is_file():
+                if not re.match(r'^[a-z0-9_\.]+$', file.name):
+                    log.warning(f"  Removing invalid resource: {file.name}")
+                    file.unlink()
+                    count += 1
+    log.info(f"Removed {count} invalid resource files.")
+
 def recompile():
     log.info(f"Recompiling {DECODED_DIR} → {OUTPUT_APK}")
     
-    # Hapus direktori build lama
     if Path(OUTPUT_APK).exists():
         Path(OUTPUT_APK).unlink()
 
-    cmd = ["apktool", "b", DECODED_DIR, "-o", OUTPUT_APK, "--force-all"]
-    log.info(f"$ {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    
-    if result.returncode != 0:
-        log.warning("Build failed! Attempting fallback: Nuking all resources.")
-        log.warning(result.stderr)
-        
-        # FALLBACK: Hapus SEMUA file di folder 'res' kecuali folder 'values'
-        res_dir = Path(DECODED_DIR) / "res"
-        if res_dir.exists():
-            for item in res_dir.iterdir():
-                if item.name != "values":
-                    if item.is_dir():
-                        shutil.rmtree(item)
-                    else:
-                        item.unlink()
-        
-        # Hapus references di public.xml & strings.xml agar tidak error
-        for xml_file in (res_dir / "values").glob("*.xml"):
-            if xml_file.name in ["public.xml", "ids.xml"]:
-                xml_file.write_text('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n</resources>')
+    # Bersihkan resource yang namanya bikin error AAPT2 sebelum build
+    clean_invalid_resources()
 
-        log.info("Retrying build without resources...")
-        run(["apktool", "b", DECODED_DIR, "-o", OUTPUT_APK, "--force-all"])
-    else:
-        log.info("Recompile success.")
+    # Menggunakan --use-aapt1 untuk menghindari validasi ketat AAPT2
+    # yang menyebabkan error "Invalid file name: must contain only [a-z0-9_.]"
+    cmd = ["apktool", "b", DECODED_DIR, "-o", OUTPUT_APK, "--force-all", "--use-aapt1"]
+    run(cmd)
+    log.info(f"Recompile complete → {OUTPUT_APK}")
 
 def main():
     if not Path(INPUT_APK).exists():
