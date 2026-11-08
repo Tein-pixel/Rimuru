@@ -20,16 +20,21 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install Apktool 2.9.3
+      - name: Install Apktool 2.9.3 Globally
         run: |
-          mkdir -p $HOME/bin
-          wget -q "https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar" -O $HOME/bin/apktool.jar
-          cat > $HOME/bin/apktool << 'SCRIPT'
+          # Download langsung ke /usr/local/bin biar sistem otomatis kenal
+          sudo wget -q "https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar" -O /usr/local/bin/apktool.jar
+          
+          # Bikin script wrapper di /usr/local/bin
+          sudo bash -c 'cat > /usr/local/bin/apktool << "SCRIPT"
           #!/bin/bash
-          java -jar $HOME/bin/apktool.jar "$@"
-          SCRIPT
-          chmod +x $HOME/bin/apktool
-          echo "$HOME/bin" >> $GITHUB_PATH
+          java -jar /usr/local/bin/apktool.jar "$@"
+          SCRIPT'
+          
+          # Kasih izin eksekusi
+          sudo chmod +x /usr/local/bin/apktool
+          
+          # Cek versi (sekarang pasti udah dikenali)
           apktool --version
 
       - name: Install Android build tools
