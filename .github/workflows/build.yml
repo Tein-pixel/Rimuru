@@ -20,32 +20,36 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # ── INSTALL APKTOOL VIA APT (ANTI ERROR) ──
-      - name: Install apktool via apt
+      - name: Install Apktool 2.9.3
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq apktool
+          mkdir -p $HOME/bin
+          wget -q "https://github.com/iBotPeaches/Apktool/releases/download/v2.9.3/apktool_2.9.3.jar" -O $HOME/bin/apktool.jar
+          cat > $HOME/bin/apktool << 'SCRIPT'
+          #!/bin/bash
+          java -jar $HOME/bin/apktool.jar "$@"
+          SCRIPT
+          chmod +x $HOME/bin/apktool
+          echo "$HOME/bin" >> $GITHUB_PATH
           apktool --version
 
       - name: Install Android build tools
         run: |
+          sudo apt-get update -qq
           sudo apt-get install -y -qq zipalign apksigner
           zipalign --version || true
           apksigner version || true
 
-      # ── DOWNLOAD APK DARI RELEASE ──
       - name: Download APK from Release
         run: |
-          # Pastikan nama file di Release lu persis "original.apk" dan tag-nya "v1.0"
+          # Pastikan file di GitHub Release bernama original.apk dengan tag v1.0
           wget -q "https://github.com/Tein-pixel/Rimuru/releases/download/v1.0/original.apk" -O original.apk
-          
           if [ ! -f original.apk ]; then
-            echo "ERROR: Gagal download APK. Cek apakah nama file di Release sudah 'original.apk' dan tag-nya 'v1.0'."
+            echo "ERROR: Gagal download APK. Cek nama file dan tag Release."
             exit 1
           fi
           echo "Input APK size: $(du -sh original.apk | cut -f1)"
 
-      - name: Patch smali + SharedPrefs
+      - name: Patch smali and sanitize resources
         run: |
           python3 patch_apk.py 2>&1 | tee patch_log.txt
           if [ ! -f rimuru_patched.apk ]; then
@@ -58,7 +62,6 @@ jobs:
       - name: Zipalign patched APK
         run: |
           zipalign -v 4 rimuru_patched.apk rimuru_aligned.apk
-          echo "Aligned APK size: $(du -sh rimuru_aligned.apk | cut -f1)"
 
       - name: Generate debug keystore
         run: |
@@ -71,7 +74,6 @@ jobs:
             -storepass rimuru123 \
             -keypass rimuru123 \
             -dname "CN=Rimuru,OU=Crack,O=Storm,L=Tower,S=Wild,C=ID"
-          echo "Keystore generated."
 
       - name: Sign APK with apksigner
         run: |
@@ -83,13 +85,7 @@ jobs:
             --out rimuru_cracked_signed.apk \
             rimuru_aligned.apk
 
-          apksigner verify rimuru_cracked_signed.apk && \
-            echo "Signature verification: PASSED" || \
-            echo "Signature verification: FAILED (may still install)"
-
-          echo "Final APK size: $(du -sh rimuru_cracked_signed.apk | cut -f1)"
-
-      - name: Upload cracked APK as artifact
+      - name: Upload cracked APK
         uses: actions/upload-artifact@v4
         with:
           name: rimuru-cracked-${{ github.run_number }}
@@ -98,17 +94,3 @@ jobs:
             patch_log.txt
           retention-days: 7
           if-no-files-found: error
-
-      - name: Job summary
-        run: |
-          echo "## Rimuru APK Patch Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| File | Size |" >> $GITHUB_STEP_SUMMARY
-          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| original.apk | $(du -sh original.apk | cut -f1) |" >> $GITHUB_STEP_SUMMARY
-          echo "| rimuru_cracked_signed.apk | $(du -sh rimuru_cracked_signed.apk | cut -f1) |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Patch Log (tail)" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -30 patch_log.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
