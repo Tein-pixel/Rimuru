@@ -37,12 +37,6 @@ TARGET_ACTIVITIES = [
     "MainActivity.smali",
 ]
 
-PATTERNS = [
-    re.compile(r'^\s*(if-(?:eqz|nez|eq|ne))\s+(v\d+|p\d+),\s*(:\w+)\s*$'),
-    re.compile(r'^\s*invoke-(?:virtual|interface)\s+.*->(?:checkPremium|isPremium|getStatus|checkStatus).*\(\)Z'),
-    re.compile(r'^\s*invoke-virtual\s+.*Ljava/lang/String;->equals\(Ljava/lang/Object;\)Z'),
-]
-
 def run(cmd: list[str], check=True) -> subprocess.CompletedProcess:
     log.info(f"$ {' '.join(cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -320,7 +314,8 @@ def inject_sharedprefs_premium(smali_dirs: list[Path]) -> int:
 
 def recompile():
     log.info(f"Recompiling {DECODED_DIR} → {OUTPUT_APK}")
-    run(["apktool", "b", DECODED_DIR, "-o", OUTPUT_APK, "--force-all"])
+    # DIUBAH DI SINI: Ditambahkan --use-aapt2 biar gak error invalid resource name
+    run(["apktool", "b", DECODED_DIR, "-o", OUTPUT_APK, "--force-all", "--use-aapt2"])
     log.info(f"Recompile complete → {OUTPUT_APK}")
 
 def main():
